@@ -1,5 +1,5 @@
 # Bilateral Exchange
-An agent-based model of a general bilateral exchange problem of *A* agents and *N* goods. This model uses boundedly rational agents, in the sense that the agents do not know the optimal quantities that maximize their utility. Instead, they iteratively make trades that improve their wellbeing, until all trades are exhausted. 
+An agent-based model of a general bilateral exchange problem of *A* agents and *N* goods. This model uses boundedly rational agents, in the sense that the agents do not know the optimal quantities that maximize their utility. Instead, they iteratively make mutually beneficial trades, until those are no longer possible. 
 
 ## Purpose
 1. This model shows that a numerical solution to a general equilibrium problem can be obtained. This can be helpful as an analytic solution becomes increasingly intractable as *A* and *N* increase.
