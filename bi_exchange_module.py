@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from IPython.display import display, clear_output
 import time
+import numpy as np
 
 def uniform_exclusive(a, b):
     # This function draws from a uniform and open interval between two numbers
@@ -99,6 +100,8 @@ class Agent:
         return self.__preferences[k]
     def get_inventory(self, k):
         return self.__inventory[k]
+    def get_entire_inventory(self):
+        return self.__inventory
     
     # Modify attribute functions
     def chg_inventory(self, k, chg):
@@ -111,6 +114,7 @@ class Market:
         self.shuffled_goods_index = []
         self.transacted_goods_tuple = []
         self.transacting_agents_tuple = []
+        self.inventory_panel = np.empty((0, 0))
 
     def generate_agents(
             self, agent_count, goods_type_count, max_endowment_per_good, 
@@ -136,6 +140,7 @@ class Market:
     def clear_transactions(self):
         self.transacted_goods_tuple = []
         self.transacting_agents_tuple = []
+        self.inventory_panel = np.empty((0, 0))
 
     '''
     Exchange procedure for an n-agents, p-goods problem: 
@@ -154,7 +159,9 @@ class Market:
     '''
 
     def execute_exchange(self, trading_days):
-        initial_transaction_count = len(self.transacted_goods_tuple)
+        # reset transactions
+        self.clear_transactions()
+        initial_transaction_count = 0
         
         for h in range(trading_days):
             self.loop_across_pairwise_agents()
@@ -165,10 +172,10 @@ class Market:
             print(f"Trading day {h+1}: {current_transaction_count} total transactions, {new_transactions} since start")
             
             # Update plot after every 10 iterations and at the end
-            if h % 100 == 0 or h == trading_days - 1:
-                self.plot_first_ten_agents_inventory()
-                time.sleep(2)
-        
+            # if h % 100 == 0 or h == trading_days - 1:
+            #     self.plot_first_ten_agents_inventory()
+            #     time.sleep(2)
+
     def loop_across_pairwise_agents(self):
         random.shuffle(self.shuffled_agents_index)
         loops_across_agents = self.agent_count - 1
@@ -180,6 +187,7 @@ class Market:
                 agent_iplus1 = self.agents[iplus1]
 
                 self.loop_across_pairwise_goods(agent_i, agent_iplus1)
+                self.record_inventory()
 
     def loop_across_pairwise_goods(self, agent_i, agent_iplus1):
         # Check arguments
@@ -336,7 +344,92 @@ class Market:
         
         return cumsum_matrix
 
+    def record_inventory(self):
+        matrix = []
+        for agent in self.agents:
+            vector = agent.get_entire_inventory()
+            vector_with_agent = vector + [self.agents.index(agent)]
+            matrix.append(vector_with_agent)
+        matrix = np.row_stack(matrix)
+        # check length of panel/divided by number of agents
+        if self.inventory_panel.size == 0:
+            time_vector = [0]*self.agent_count
+            matrix_with_time = np.column_stack((matrix, time_vector))
+            self.inventory_panel = matrix_with_time
+        else:
+            matrix_nrow = self.inventory_panel.shape[0]
+            time = matrix_nrow/self.agent_count
+            time_vector = [time]*self.agent_count
+            matrix_with_time = np.column_stack((matrix, time_vector))
+            self.inventory_panel = np.row_stack(
+                (self.inventory_panel, matrix_with_time)
+                )
 
+    def plot_edgeworth(self, agent1, agent2, good1, good2):
+        panel = pd.DataFrame(self.inventory_panel)
+        name_vector = []
+        for i in range(self.goods_type_count):
+            name = f'good_{i}'
+            name_vector.append(name)
+            if i == self.goods_type_count - 1:
+                name_vector.extend(["agent", 'time'])
+        panel.columns = name_vector
+        short_panel = panel[ 
+            ( panel["agent"] == agent1 ) | ( panel["agent"] == agent2) 
+            ]
+        small_panel = short_panel[
+            [name_vector[good1], name_vector[good2], "agent", "time"]
+            ]
+        print(small_panel)
+    
+        # Separate data for each agent
+        agent1_data = short_panel[short_panel["agent"] == agent1]
+        agent2_data = short_panel[short_panel["agent"] == agent2]
+        
+        # Create the scatter plot
+        fig = go.Figure()
+
+        # Add trace for agent1
+        fig.add_trace(go.Scatter(
+            x=agent1_data[name_vector[good1]],
+            y=agent1_data[name_vector[good2]],
+            mode='markers',
+            marker=dict(
+                color=agent1_data['time'],
+                colorscale='Reds',
+                showscale=True,
+                colorbar=dict(title="Time (Agent 1)")
+            ),
+            name=f'Agent {agent1}'
+        ))
+
+        # Add trace for agent2
+        fig.add_trace(go.Scatter(
+            x=agent2_data[name_vector[good1]],
+            y=agent2_data[name_vector[good2]],
+            mode='markers',
+            marker=dict(
+                color=agent2_data['time'],
+                colorscale='Blues',
+                showscale=True,
+                colorbar=dict(title="Time (Agent 2)")
+            ),
+            name=f'Agent {agent2}'
+        ))
+
+        # Update layout to make the plot square
+        fig.update_layout(
+            title="Edgeworth Box Plot",
+            xaxis_title=f"Good {good1} Inventory",
+            yaxis_title=f"Good {good2} Inventory",
+            hovermode='closest',
+            yaxis=dict(
+                scaleanchor="x",
+                scaleratio=1,
+            )
+        )
+
+        fig.show()
 
     def plot_first_ten_agents_inventory(self):
         """
