@@ -1,3 +1,8 @@
+# John T.H. Wong
+# Hardware: Macbook Air, M1, 2020
+# OS: MacOS 15.3.2
+# SDE: VS Code, 1.98.2 (Universal)
+
 import random
 import pandas as pd
 import plotly.express as px
