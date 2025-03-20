@@ -142,7 +142,7 @@ class Market:
 
     For each "trading day":
 
-    1. Loop across pairwise agents: we will uniformly activate each agent m, starting with m = 0, from a list of agents and they will pair with each m+1 agent. This subprocedure ensures that we iterate through all (n^2 - n) pariwise agent combinations. After all n agents have gone, we will shuffle the list and start with m = 0 again.
+    1. Loop across pairwise agents: we will uniformly activate each agent m, where m = 0, 1,..., n - 1. Agent m will pair with each m+z agent, until m+z = n. This subprocedure ensures that we iterate through all (n^2 - n) pariwise agent combinations. After all n-1 agents have gone, we will shuffle the list and start with m = 0 again.
 
     1a. Agent retrieval: we index each agent initially by i. We store a duplicate of this initial index i in a list within the market, and index this index list by the aforementioned m. In lieu of shuffling .agents, we shuffle this index. We then iterate through this shuffled list, and for each m, retrieves its value (which is a possible value of i, call it i*), and then find the i*-th agent.
 
@@ -153,11 +153,25 @@ class Market:
     3. Loop within pairwise goods: for two pairwise goods that successfully trades for one unit, the agents update their pairwise MRS and checks if another trade is possible. The trade continues to occur until the pairwise MRS's of both agents cross.
     '''
 
-    def execute_exchange(self, trading_days):
+    def execute_exchange(self, trading_days, strategic_error=None):
+        '''
+        strategic_error is the probability (CDF) that the two agents will stop trading two goods, even when it will improve their wellbeing. The higher the probability, the more likely the trade will arbitrarily stop.
+
+        In the third step of the exchange procedure, after we know a pairwise combination ought to be exchanged but before the exchange occurs, we draw a random value between zero and one. If the draw value falls below strategic_error (i.e., within the CDF), trading of the current pairwise combination is halted. And the agents move onto trading the next pairwise combination of goods.
+
+        strategic_error does two things:
+        1. Conditional on a trading partner, strategic_error ensures that agent i does not just trade on a specific pairwise combination.
+        2. Conditional on a pairwise combination that agent i prefers to make trades on, strategic_error ensures that agent i does this trade with more than one partner.
+        '''
+        if strategic_error is not None:
+            if strategic_error >=1 or strategic_error < 0:
+                raise ValueError(
+                    "strategic_error, if provided, must be between (zero or higher) and (less than one)."
+                )
         initial_transaction_count = len(self.transacted_goods_tuple)
         
         for h in range(trading_days):
-            self.loop_across_pairwise_agents()
+            self.loop_across_pairwise_agents(strategic_error)
             
             # Print number of transactions after each trading day
             current_transaction_count = len(self.transacted_goods_tuple)
@@ -169,7 +183,7 @@ class Market:
                 self.plot_first_ten_agents_inventory()
                 time.sleep(2)
         
-    def loop_across_pairwise_agents(self):
+    def loop_across_pairwise_agents(self, strategic_error=None):
         random.shuffle(self.shuffled_agents_index)
         loops_across_agents = self.agent_count - 1
         for m in range(loops_across_agents):
@@ -179,15 +193,19 @@ class Market:
                 iplus1 = self.shuffled_agents_index[mplus1]
                 agent_iplus1 = self.agents[iplus1]
 
-                self.loop_across_pairwise_goods(agent_i, agent_iplus1)
+                self.loop_across_pairwise_goods(
+                    agent_i, agent_iplus1, strategic_error
+                    )
 
-    def loop_across_pairwise_goods(self, agent_i, agent_iplus1):
+    def loop_across_pairwise_goods(
+            self, agent_i, agent_iplus1, strategic_error=None
+            ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
             not isinstance(agent_iplus1, Agent)
             ):
             raise TypeError(
-                "Both arguments must be instances of the Agent class"
+                "agent arguments must be instances of the Agent class"
                 )
         random.shuffle(self.shuffled_goods_index)
         loops_across_goods = self.goods_type_count - 1
@@ -197,10 +215,12 @@ class Market:
                 kplus1 = self.shuffled_goods_index[jplus1]
 
                 self.loop_within_pairwise_goods(
-                    agent_i, agent_iplus1, k, kplus1
+                    agent_i, agent_iplus1, k, kplus1, strategic_error
                     )
     
-    def loop_within_pairwise_goods(self, agent_i, agent_iplus1, k, kplus1):
+    def loop_within_pairwise_goods(
+            self, agent_i, agent_iplus1, k, kplus1, strategic_error=None
+            ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
             not isinstance(agent_iplus1, Agent)
@@ -243,25 +263,32 @@ class Market:
             # and if there is one good,
             # the decision will always be false.
             if buyer_decision and seller_decision:
-                buyer_of_k.chg_inventory(k, 1)
-                buyer_of_k.chg_inventory(kplus1, -1)
-                seller_of_k.chg_inventory(k, -1)
-                seller_of_k.chg_inventory(kplus1, 1)
+                draw = random.uniform(0, 1)
+                if (strategic_error is not None) and (draw < strategic_error):
+                    break
+                    # If strategic error is not specified, or
+                    # the draw exceeds the threshold, python 
+                    # proceeds to execute the following else block.
+                else:
+                    buyer_of_k.chg_inventory(k, 1)
+                    buyer_of_k.chg_inventory(kplus1, -1)
+                    seller_of_k.chg_inventory(k, -1)
+                    seller_of_k.chg_inventory(kplus1, 1)
 
-                self.transacted_goods_tuple.append(
-                    (k, kplus1)
-                )
-                self.transacting_agents_tuple.append(
-                    (self.agents.index(buyer_of_k), 
-                        self.agents.index(seller_of_k)
-                     )
-                )
-                
-                mrs_diff = self.util_calc("mrs", agent_i, k, kplus1) - (
-                    self.util_calc("mrs", agent_iplus1, k, kplus1)
-                )
-                transaction_occurred = True
-                iteration_count += 1
+                    self.transacted_goods_tuple.append(
+                        (k, kplus1)
+                    )
+                    self.transacting_agents_tuple.append(
+                        (self.agents.index(buyer_of_k), 
+                            self.agents.index(seller_of_k)
+                        )
+                    )
+                    
+                    mrs_diff = self.util_calc("mrs", agent_i, k, kplus1) - (
+                        self.util_calc("mrs", agent_iplus1, k, kplus1)
+                    )
+                    transaction_occurred = True
+                    iteration_count += 1
             else:
                 break
                 
@@ -293,7 +320,7 @@ class Market:
             raise TypeError("Output for the calculator isn't specified.")
         
     
-    def good_transactions_to_dataframe(self, by="good"):
+    def transactions_to_dataframe(self, by="good"):
         if by == "good":
             transactions_tuple = self.transacted_goods_tuple
             type_length = self.goods_type_count
