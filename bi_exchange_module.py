@@ -124,6 +124,8 @@ class Market:
         self.transacting_agents_tuple = []
         self.inventory_panel = np.empty((0, 0))
         self.aggregate_utility = []
+        self.individual_utilities = []
+        self.shuffled_agents_index_vintage = []
 
     def generate_agents(
             self, agent_count, goods_type_count, max_endowment_per_good, 
@@ -151,6 +153,8 @@ class Market:
         self.transacting_agents_tuple = []
         self.inventory_panel = np.empty((0, 0))
         self.aggregate_utility = []
+        self.individual_utilities = []
+        self.shuffled_agents_index_vintage = []
 
     '''
     Exchange procedure for an n-agents, p-goods problem: 
@@ -172,7 +176,7 @@ class Market:
             self, 
             trading_days, 
             strategic_error=None,
-            plot_type="edgeworth",
+            plot_type=None,
             ):
         '''
         strategic_error is the probability (CDF) that the two agents will stop trading two goods, even when it will improve their wellbeing. The higher the probability, the more likely the trade will arbitrarily stop.
@@ -208,9 +212,18 @@ class Market:
             #     self.plot_first_ten_agents_inventory()
             #     time.sleep(2)
 
+            # DEBUG: print shuffled_agents_index
+            print(f"this is the {h}-th agents index: {self.shuffled_agents_index}")
+
     def loop_across_pairwise_agents(self, strategic_error=None,
-            plot_type="edgeworth",):
+            plot_type=None,):
+        
+        # Shuffle the agents index to randomize activation
         random.shuffle(self.shuffled_agents_index)
+        # Store this activation order for future reference
+        # Use list() to create a copy to prevent modifying history when shuffling again
+        self.shuffled_agents_index_vintage.append(list(self.shuffled_agents_index))
+
         loops_across_agents = self.agent_count - 1
         for m in range(loops_across_agents):
             i = self.shuffled_agents_index[m]
@@ -230,13 +243,16 @@ class Market:
                 elif plot_type == "inventory_timeseries":
                     self.plot_timeseries_of_good_inventory()
                     # time.sleep(1)
-                elif plot_type == "utility_timeseries":
+                elif plot_type == "aggregate_utility":
                     self.plot_aggregate_utility()
+                    time.sleep(0.4)
+                elif plot_type == "individual_utility":
+                    self.plot_individual_utilities()
                     time.sleep(0.4)
 
     def loop_across_pairwise_goods(
             self, agent_i, agent_iplus1, strategic_error=None,
-            plot_type="edgeworth",
+            plot_type=None,
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
@@ -259,7 +275,7 @@ class Market:
     
     def loop_within_pairwise_goods(
             self, agent_i, agent_iplus1, k, kplus1, strategic_error=None,
-            plot_type="edgeworth",
+            plot_type=None,
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
@@ -331,7 +347,7 @@ class Market:
                     iteration_count += 1
                     
                     self.record_inventory()
-                    self.record_aggregate_utility()
+                    self.record_utility()
                     if (
                         len(self.transacted_goods_tuple) <= 10 and
                         plot_type == "edgeworth"
@@ -656,7 +672,7 @@ class Market:
         # Display the figure (replaces previous output)
         display(fig)
 
-    def record_aggregate_utility(self):
+    def record_utility(self):
         utils = []
         for agent in self.agents:
             inventory = agent.get_entire_inventory()
@@ -664,6 +680,7 @@ class Market:
             util = np.prod(np.power(inventory, preferences))
             utils.append(util)
         
+        self.individual_utilities.append(utils)
         aggregate = sum(utils)
         self.aggregate_utility.append(aggregate)
     
@@ -687,6 +704,50 @@ class Market:
         # if the time series is shorter
         min_length = 100
         if len(self.aggregate_utility) < min_length:
+            fig.update_xaxes(range=[1, min_length])
+        
+        # Clear the output before displaying the new plot
+        clear_output(wait=False)
+        
+        # Display the figure (replaces previous output)
+        display(fig)
+
+    def plot_individual_utilities(self):
+        # Check if we have recorded any utilities
+        if not self.individual_utilities:
+            print("No utility data recorded yet.")
+            return
+            
+        # Create a matrix whose columns are agents and rows are transaction number
+        util_panel = np.row_stack(self.individual_utilities)
+
+        # Create plot
+        fig = go.FigureWidget()
+
+        # Call a palette
+        palette = qualitative.Pastel
+
+        # Add n series for n agents with loop
+        for i in range(self.agent_count):
+            fig.add_trace(go.Scatter(
+                x=list(range(1, util_panel.shape[0]+1)),
+                y=util_panel[:,i],
+                name=f"Agent {i}",
+                mode='lines',
+                line=dict(color=palette[i % len(palette)])
+            ))
+
+        fig.update_layout(
+            title="Individual Utility Time Series",
+            xaxis_title="Transactions",
+            yaxis_title="Utility",
+            hovermode='closest'
+        )
+        
+        # Set x-axis range from 1 to minimum_length,
+        # if the time series is shorter
+        min_length = 100
+        if util_panel.shape[0] < min_length:
             fig.update_xaxes(range=[1, min_length])
         
         # Clear the output before displaying the new plot
