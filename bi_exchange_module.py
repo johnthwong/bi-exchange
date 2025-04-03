@@ -7,6 +7,7 @@ import random
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.colors import qualitative
 from IPython.display import display, clear_output
 import time
 import numpy as np
@@ -107,6 +108,8 @@ class Agent:
         return self.__inventory[k]
     def get_entire_inventory(self):
         return self.__inventory
+    def get_entire_pref(self):
+        return self.__preferences
     
     # Modify attribute functions
     def chg_inventory(self, k, chg):
@@ -120,6 +123,7 @@ class Market:
         self.transacted_goods_tuple = []
         self.transacting_agents_tuple = []
         self.inventory_panel = np.empty((0, 0))
+        self.aggregate_utility = []
 
     def generate_agents(
             self, agent_count, goods_type_count, max_endowment_per_good, 
@@ -146,13 +150,14 @@ class Market:
         self.transacted_goods_tuple = []
         self.transacting_agents_tuple = []
         self.inventory_panel = np.empty((0, 0))
+        self.aggregate_utility = []
 
     '''
     Exchange procedure for an n-agents, p-goods problem: 
 
     For each "trading day":
 
-    1. Loop across pairwise agents: we will uniformly activate each agent m, where m = 0, 1,..., n - 1. Agent m will pair with each m+z agent, until m+z = n. This subprocedure ensures that we iterate through all (n^2 - n) pariwise agent combinations. After all n-1 agents have gone, we will shuffle the list and start with m = 0 again.
+    1. Loop across pairwise agents: we will uniformly activate each agent m, where m = 0, 1,..., n - 1. Agent m will pair with each m+z agent, until m+z = n. This subprocedure ensures that we iterate through all (n^2 - n) pairwise agent combinations. After all n-1 agents have gone, we will shuffle the list and start with m = 0 again.
 
     1a. Agent retrieval: we index each agent initially by i. We store a duplicate of this initial index i in a list within the market, and index this index list by the aforementioned m. In lieu of shuffling .agents, we shuffle this index. We then iterate through this shuffled list, and for each m, retrieves its value (which is a possible value of i, call it i*), and then find the i*-th agent.
 
@@ -219,9 +224,15 @@ class Market:
                     plot_type,
                     )
                 
-                if plot_type == "pariwise_goods":
+                if plot_type == "pairwise_goods":
                     self.plot_inventory_of_pairwise_goods()
                     time.sleep(5)
+                elif plot_type == "inventory_timeseries":
+                    self.plot_timeseries_of_good_inventory()
+                    # time.sleep(1)
+                elif plot_type == "utility_timeseries":
+                    self.plot_aggregate_utility()
+                    time.sleep(0.4)
 
     def loop_across_pairwise_goods(
             self, agent_i, agent_iplus1, strategic_error=None,
@@ -320,6 +331,7 @@ class Market:
                     iteration_count += 1
                     
                     self.record_inventory()
+                    self.record_aggregate_utility()
                     if (
                         len(self.transacted_goods_tuple) <= 10 and
                         plot_type == "edgeworth"
@@ -450,18 +462,8 @@ class Market:
             self.inventory_panel = matrix_with_time
 
     def plot_edgeworth(self, agent1, agent2, good1, good2):
-        # Turn .inventory_panel from a list to a dataframe whose size is (number of agents * ticks elapsed) * number of goods.
-        panel = pd.DataFrame(self.inventory_panel)
 
-        # The dataframe needs names. The names are the good index, plus agent and time for the last two columns.
-        name_vector = []
-        for i in range(self.goods_type_count):
-            name = f'good_{i}'
-            name_vector.append(name)
-
-            if i == self.goods_type_count - 1:
-                name_vector.extend(["agent", 'time'])
-        panel.columns = name_vector
+        panel = self.convert_inventory_panel_to_dataframe()
         
         # Separate data for each agent
         agent1_data = panel[panel["agent"] == agent1]
@@ -470,10 +472,14 @@ class Market:
         # Create the scatter plot
         fig = go.Figure()
 
+        # Use column names directly
+        good1_name = f'good_{good1}'
+        good2_name = f'good_{good2}'
+        
         # Add trace for agent1
         fig.add_trace(go.Scatter(
-            x=agent1_data[name_vector[good1]],
-            y=agent1_data[name_vector[good2]],
+            x=agent1_data[good1_name],
+            y=agent1_data[good2_name],
             mode='markers',
             marker=dict(
                 color=agent1_data['time'],
@@ -486,8 +492,8 @@ class Market:
 
         # Add trace for agent2
         fig.add_trace(go.Scatter(
-            x=agent2_data[name_vector[good1]],
-            y=agent2_data[name_vector[good2]],
+            x=agent2_data[good1_name],
+            y=agent2_data[good2_name],
             mode='markers',
             marker=dict(
                 color=agent2_data['time'],
@@ -501,8 +507,8 @@ class Market:
         # Update layout to make the plot square
         fig.update_layout(
             title="Edgeworth Box Plot",
-            xaxis_title=f"Good {good1} Inventory",
-            yaxis_title=f"Good {good2} Inventory",
+            xaxis_title=f"{good1_name} Inventory",
+            yaxis_title=f"{good2_name} Inventory",
             hovermode='closest',
             yaxis=dict(
                 scaleanchor="x",
@@ -511,6 +517,23 @@ class Market:
         )
         clear_output(wait=True)
         fig.show()
+
+    def convert_inventory_panel_to_dataframe(self):
+        # Turn .inventory_panel from a list to a dataframe whose size is (number of agents * ticks elapsed) * number of goods.
+        panel = pd.DataFrame(self.inventory_panel)
+
+        # The dataframe needs names. The names are the good index, plus agent and time for the last two columns.
+        name_vector = []
+        for i in range(self.goods_type_count):
+            name = f'good_{i}'
+            name_vector.append(name)
+
+            if i == self.goods_type_count - 1:
+                name_vector.extend(["agent", 'time'])
+        panel.columns = name_vector
+
+        return panel
+        
 
     def plot_inventory_of_pairwise_goods(self):
         """
@@ -569,7 +592,105 @@ class Market:
         # Display the figure (replaces previous output)
         display(fig)
 
-'''
-Do an updating plotly edgeworth box of the first 10 agents of the first two goods.
-Do an updating time series of the first 5 goods' transaction volume.
-'''
+    def plot_timeseries_of_good_inventory(self, good: int = 0):
+        '''
+        This method plots one column (i.e., for one good) of the inventory_panel. Each line is one agent's inventory of that good over time.
+
+        By default, it plots the holding of good 0.
+        '''
+        panel = self.convert_inventory_panel_to_dataframe()
+
+        panel_select = panel[[f'good_{good}', 'agent', 'time']]
+        
+        # # Get unique time values and take only the last 20
+        # time_values = sorted(panel_select["time"].unique())
+        # if len(time_values) > 20:
+        #     time_values = time_values[-20:]
+        
+        # # Filter data to only include the last 20 time points
+        # panel_select = panel_select[panel_select["time"].isin(time_values)]
+
+        # Create a list to store vectors by agent
+        agents_data = []
+        # Create series by agent
+        for i in range(self.agent_count):
+            df_filtered = panel_select[panel_select["agent"] == i]
+            agents_data.append(df_filtered)
+
+        # Create the plot
+        fig = go.FigureWidget()
+
+        # Call a palette
+        palette = qualitative.Pastel
+
+        # Loop to add time series
+        for i in range(self.agent_count):
+            agent_data = agents_data[i]
+
+            fig.add_trace(go.Scatter(
+                x=agent_data["time"],
+                y=agent_data[f"good_{good}"],
+                name=f"Agent {i}",
+                mode='lines',
+                # Cycle through the list of colors with the modulus operator
+                line=dict(color=palette[i % len(palette)]),
+            ))
+
+        # Update layout
+        fig.update_layout(
+            title=f"Time Series of Good {good} Inventory by Agent",
+            xaxis_title="Transactions",
+            yaxis_title="Good Count",
+            hovermode='x unified'
+        )
+        
+        # Set x-axis range from 1 to minimum_length,
+        # if the time series is shorter
+        min_length = 100
+        if agents_data[0].shape[0] < min_length:
+            fig.update_xaxes(range=[1, min_length])
+        
+        # Clear the output before displaying the new plot
+        clear_output(wait=True)
+        
+        # Display the figure (replaces previous output)
+        display(fig)
+
+    def record_aggregate_utility(self):
+        utils = []
+        for agent in self.agents:
+            inventory = agent.get_entire_inventory()
+            preferences = agent.get_entire_pref()
+            util = np.prod(np.power(inventory, preferences))
+            utils.append(util)
+        
+        aggregate = sum(utils)
+        self.aggregate_utility.append(aggregate)
+    
+    def plot_aggregate_utility(self):
+        fig = go.FigureWidget()
+
+        fig.add_trace(go.Scatter(
+            y=self.aggregate_utility,
+            x=list(range(1, len(self.aggregate_utility)+1)),
+            mode='lines',
+            line=dict(color="blue")
+        ))
+
+        fig.update_layout(
+            title="Aggregate Utility",
+            xaxis_title="Transactions",
+            hovermode='closest'
+        )
+        
+        # Set x-axis range from 1 to minimum_length,
+        # if the time series is shorter
+        min_length = 100
+        if len(self.aggregate_utility) < min_length:
+            fig.update_xaxes(range=[1, min_length])
+        
+        # Clear the output before displaying the new plot
+        clear_output(wait=False)
+        
+        # Display the figure (replaces previous output)
+        display(fig)
