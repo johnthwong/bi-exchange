@@ -163,7 +163,12 @@ class Market:
     3. Loop within pairwise goods: for two pairwise goods that successfully trades for one unit, the agents update their pairwise MRS and checks if another trade is possible. The trade continues to occur until the pairwise MRS's of both agents cross.
     '''
 
-    def execute_exchange(self, trading_days, strategic_error=None):
+    def execute_exchange(
+            self, 
+            trading_days, 
+            strategic_error=None,
+            plot_type="edgeworth",
+            ):
         '''
         strategic_error is the probability (CDF) that the two agents will stop trading two goods, even when it will improve their wellbeing. The higher the probability, the more likely the trade will arbitrarily stop.
 
@@ -185,19 +190,21 @@ class Market:
         initial_transaction_count = len(self.transacted_goods_tuple)
         
         for h in range(trading_days):
-            self.loop_across_pairwise_agents(strategic_error)
+            self.loop_across_pairwise_agents(strategic_error, plot_type)
             
             # Print number of transactions after each trading day
             current_transaction_count = len(self.transacted_goods_tuple)
             new_transactions = current_transaction_count - initial_transaction_count
-            print(f"Trading day {h+1}: {current_transaction_count} total transactions, {new_transactions} since start")
+            print(f"Trading day {h+1}: {current_transaction_count} total transactions, {new_transactions} since yesterday")
+            initial_transaction_count = len(self.transacted_goods_tuple)
             
             # Update plot after every 10 iterations and at the end
             # if h % 100 == 0 or h == trading_days - 1:
             #     self.plot_first_ten_agents_inventory()
             #     time.sleep(2)
 
-    def loop_across_pairwise_agents(self, strategic_error=None):
+    def loop_across_pairwise_agents(self, strategic_error=None,
+            plot_type="edgeworth",):
         random.shuffle(self.shuffled_agents_index)
         loops_across_agents = self.agent_count - 1
         for m in range(loops_across_agents):
@@ -208,12 +215,17 @@ class Market:
                 agent_iplus1 = self.agents[iplus1]
 
                 self.loop_across_pairwise_goods(
-                    agent_i, agent_iplus1, strategic_error
+                    agent_i, agent_iplus1, strategic_error,
+                    plot_type,
                     )
-                self.record_inventory()
+                
+                if plot_type == "pariwise_goods":
+                    self.plot_inventory_of_pairwise_goods()
+                    time.sleep(5)
 
     def loop_across_pairwise_goods(
-            self, agent_i, agent_iplus1, strategic_error=None
+            self, agent_i, agent_iplus1, strategic_error=None,
+            plot_type="edgeworth",
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
@@ -230,11 +242,13 @@ class Market:
                 kplus1 = self.shuffled_goods_index[jplus1]
 
                 self.loop_within_pairwise_goods(
-                    agent_i, agent_iplus1, k, kplus1, strategic_error
+                    agent_i, agent_iplus1, k, kplus1, strategic_error,
+                    plot_type,
                     )
     
     def loop_within_pairwise_goods(
-            self, agent_i, agent_iplus1, k, kplus1, strategic_error=None
+            self, agent_i, agent_iplus1, k, kplus1, strategic_error=None,
+            plot_type="edgeworth",
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
@@ -304,6 +318,18 @@ class Market:
                     )
                     transaction_occurred = True
                     iteration_count += 1
+                    
+                    self.record_inventory()
+                    if (
+                        len(self.transacted_goods_tuple) <= 10 and
+                        plot_type == "edgeworth"
+                        ):
+                        self.plot_edgeworth(
+                            self.agents.index(agent_i),
+                            self.agents.index(agent_iplus1), 
+                            k, 
+                            kplus1)
+                        time.sleep(4)
             else:
                 break
                 
@@ -313,6 +339,9 @@ class Market:
 
 
     def util_calc(self, output, agent, good1_index, good2_index):
+        '''
+        This function makes calculations and decisions related to two goods. It can return a given agent's MRS between two goods. It can also decide whether an agent will be better off if it traded one good for another. 
+        '''
         pref_1 = agent.get_pref(good1_index)
         pref_2 = agent.get_pref(good2_index)
         inventory_1 = agent.get_inventory(good1_index)
@@ -336,6 +365,9 @@ class Market:
         
     
     def transactions_to_dataframe(self, by="good"):
+        '''
+        This function takes transactions data (which are stored as a tuple) and converts them into a wide dataframe, where each row is indexted to transaction count and the columns are either by good or by agent. Each value reports the *cumulative* transaction count of either the good or the agent, as of a given transaction.
+        '''
         if by == "good":
             transactions_tuple = self.transacted_goods_tuple
             type_length = self.goods_type_count
@@ -379,46 +411,61 @@ class Market:
         return cumsum_matrix
 
     def record_inventory(self):
+        '''
+        This helper function collects a snapshot of each agent's inventory, with which it updates the market's inventory_panel attribute. We plot the attribute after a transaction.
+        '''
+
         matrix = []
         for agent in self.agents:
             vector = agent.get_entire_inventory()
+            # Add an element to the vector whose value is the agent's index
             vector_with_agent = vector + [self.agents.index(agent)]
             matrix.append(vector_with_agent)
+        
+        # row_stack creates a wide table whose columns are goods
         matrix = np.row_stack(matrix)
-        # check length of panel/divided by number of agents
-        if self.inventory_panel.size == 0:
-            time_vector = [0]*self.agent_count
-            matrix_with_time = np.column_stack((matrix, time_vector))
-            self.inventory_panel = matrix_with_time
-        else:
+
+        '''
+        This if-statement records the time of corresponding to each row without the use of a counter.
+
+        We count the row length of the inventory_panel attribute. Since row length must be (n * T), where n is the number of agents and T is time elasped. We divide row length by n to derive T.
+
+        Then we create a 1 * n vector whose values are T. And we append it column-wise to the inventory matrix.
+
+        Then we append the "timed" inventory matrix to the inventory panel.
+
+        If there are no transactions in the panel, T must be one. We also want to prevent a division by zero error. So we manually set the element values of the time vector to one.
+        '''
+        if self.inventory_panel.size != 0:
             matrix_nrow = self.inventory_panel.shape[0]
-            time = matrix_nrow/self.agent_count
+            time = matrix_nrow/self.agent_count + 1
             time_vector = [time]*self.agent_count
             matrix_with_time = np.column_stack((matrix, time_vector))
             self.inventory_panel = np.row_stack(
                 (self.inventory_panel, matrix_with_time)
                 )
+        else:
+            time_vector = [1]*self.agent_count
+            matrix_with_time = np.column_stack((matrix, time_vector))
+            self.inventory_panel = matrix_with_time
 
     def plot_edgeworth(self, agent1, agent2, good1, good2):
+        # Turn .inventory_panel from a list to a dataframe whose size is (number of agents * ticks elapsed) * number of goods.
         panel = pd.DataFrame(self.inventory_panel)
+
+        # The dataframe needs names. The names are the good index, plus agent and time for the last two columns.
         name_vector = []
         for i in range(self.goods_type_count):
             name = f'good_{i}'
             name_vector.append(name)
+
             if i == self.goods_type_count - 1:
                 name_vector.extend(["agent", 'time'])
         panel.columns = name_vector
-        short_panel = panel[ 
-            ( panel["agent"] == agent1 ) | ( panel["agent"] == agent2) 
-            ]
-        small_panel = short_panel[
-            [name_vector[good1], name_vector[good2], "agent", "time"]
-            ]
-        print(small_panel)
-    
+        
         # Separate data for each agent
-        agent1_data = short_panel[short_panel["agent"] == agent1]
-        agent2_data = short_panel[short_panel["agent"] == agent2]
+        agent1_data = panel[panel["agent"] == agent1]
+        agent2_data = panel[panel["agent"] == agent2]
         
         # Create the scatter plot
         fig = go.Figure()
@@ -462,12 +509,12 @@ class Market:
                 scaleratio=1,
             )
         )
-
+        clear_output(wait=True)
         fig.show()
 
-    def plot_first_ten_agents_inventory(self):
+    def plot_inventory_of_pairwise_goods(self):
         """
-        Creates a biplot of the first ten agents' inventory for 
+        Creates a biplot of the first twenty agents' inventory for 
         the first two goods using Plotly. 
         Replaces previous plot with the current one in notebook environments.
         """
@@ -475,8 +522,8 @@ class Market:
         if len(self.agents) < 1 or self.goods_type_count < 2:
             return
         
-        # Get number of agents to plot (up to 10)
-        agents_to_plot = min(10, len(self.agents))
+        # Get number of agents to plot (up to 20)
+        agents_to_plot = min(20, len(self.agents))
         
         # Create data for the plot
         x_values = []  # Good 0 inventory
@@ -486,8 +533,8 @@ class Market:
         # Collect data for each agent
         for i in range(agents_to_plot):
             agent = self.agents[i]
-            x_values.append(agent.get_inventory(4))
-            y_values.append(agent.get_inventory(5))
+            x_values.append(agent.get_inventory(0))
+            y_values.append(agent.get_inventory(1))
             agent_labels.append(f"Agent {i}")
         
         # Create the scatter plot
