@@ -545,7 +545,7 @@ class Market:
         # Separate data for each agent
         agent1_data = panel[panel["agent"] == agent1]
         agent2_data = panel[panel["agent"] == agent2]
-        
+
         # Create the scatter plot
         fig = go.Figure()
 
@@ -557,39 +557,75 @@ class Market:
         fig.add_trace(go.Scatter(
             x=agent1_data[good1_name],
             y=agent1_data[good2_name],
-            mode='markers',
+            mode='markers+text',
+            text=f'{agent1}',
+            textposition="middle center",
+            textfont=dict(
+                # Use white text for darker points, black for lighter points
+                color=['white' if t > (agent1_data['time'].max() / 2) else 'black' 
+                       for t in agent1_data['time']],
+                size=9  # Smaller text size
+            ),
             marker=dict(
                 color=agent1_data['time'],
                 colorscale='Reds',
                 showscale=True,
-                colorbar=dict(title="Time (Agent 1)")
+                colorbar=dict(title="Transactions"),
+                size = 13,
             ),
-            name=f'Agent {agent1}'
+            name=f'Agent {agent1}',
+            showlegend=False
         ))
 
         # Add trace for agent2
         fig.add_trace(go.Scatter(
             x=agent2_data[good1_name],
             y=agent2_data[good2_name],
-            mode='markers',
+            mode='markers+text',
+            text=f'{agent2}',
+            textposition="middle center",
+            textfont=dict(
+                # Use white text for darker points, black for lighter points
+                color=['white' if t > (agent2_data['time'].max() / 2) else 'black' 
+                       for t in agent2_data['time']],
+                size=9  # Smaller text size
+            ),
             marker=dict(
                 color=agent2_data['time'],
                 colorscale='Blues',
-                showscale=True,
-                colorbar=dict(title="Time (Agent 2)")
+                colorbar=dict(title="Transactions"),
+                # showscale=False,
+                size = 13,
             ),
-            name=f'Agent {agent2}'
+            name=f'Agent {agent2}',
+            showlegend=False
         ))
 
+        # Calculate the max x value and add 5
+        max_x1 = agent1_data[good1_name].max()
+        max_x2 = agent2_data[good1_name].max()
+        max_x = max(max_x1, max_x2) + 10
+        
+        # Calculate max y value (no adjustment needed but keeping for reference)
+        max_y1 = agent1_data[good2_name].max()
+        max_y2 = agent2_data[good2_name].max()
+        max_y = max(max_y1, max_y2) + 10
+        
         # Update layout to make the plot square
         fig.update_layout(
             title="Edgeworth Box Plot",
             xaxis_title=f"{good1_name} Inventory",
             yaxis_title=f"{good2_name} Inventory",
             hovermode='closest',
+            width=600,  # Fixed width
+            height=600,  # Equal height for square aspect
+            xaxis=dict(
+                range=[0, max_x]  # Start at zero, end at max + 5
+            ),
             yaxis=dict(
                 scaleanchor="x",
                 scaleratio=1,
+                range=[0, max_y]  # Start at zero, auto-determine max
             )
         )
         clear_output(wait=True)
