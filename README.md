@@ -8,7 +8,7 @@ An agent-based model of a general bilateral exchange problem of *A* agents and *
 
 ## What's new
 - 2025-04-03:
-  -  Fix: the Plotly graphs now work.
+  -  Fix: Edgeworth box now works.
   -  New: Trade within friendship network only.
   -  New: Pairwise good plot.
   -  New: Time series plot of aggergate utility.
