@@ -126,6 +126,7 @@ class Market:
         self.aggregate_utility = []
         self.individual_utilities = []
         self.shuffled_agents_index_vintage = []
+        self.friends_dict = {}
 
     def generate_agents(
             self, agent_count, goods_type_count, max_endowment_per_good, 
@@ -147,6 +148,36 @@ class Market:
         self.shuffled_agents_index = list(range(agent_count))
         # Update .shuffled_goods_index:
         self.shuffled_goods_index = list(range(goods_type_count))
+
+    def generate_network(self, size: int):
+        # Error handling
+        if self.agents is None:
+            raise AttributeError(
+                "Agents need to be generated before network can be."
+            )   
+        if size <= 0:
+            raise ValueError(
+                "Size must be a positive integer for network to be generated."
+                )
+        if size >= len(self.agents):
+            raise ValueError(
+                "Network size must be less than the number of agents."
+            )
+        
+        # Clear existing friends dictionary
+        self.friends_dict = {}
+
+        # Set up dictionary for fast retrieval of agents.
+        friends_dict = {}
+        for i in range(self.agent_count):
+            # use list comprehension to get an agents index that excludes i
+            agents_index_without_i = (
+                 [j for j in range(self.agent_count) if j != i]
+            )
+            friends = random.sample(agents_index_without_i, size)
+            friends_dict[i] = friends
+
+        self.friends_dict = friends_dict
 
     def clear_transactions(self):
         self.transacted_goods_tuple = []
@@ -177,6 +208,7 @@ class Market:
             trading_days, 
             strategic_error=None,
             plot_type=None,
+            trade_within_network: bool = False,
             ):
         '''
         strategic_error is the probability (CDF) that the two agents will stop trading two goods, even when it will improve their wellbeing. The higher the probability, the more likely the trade will arbitrarily stop.
@@ -193,13 +225,24 @@ class Market:
                     "strategic_error, if provided, must be between (zero or higher) and (less than one)."
                 )
         
+        if trade_within_network:
+            # is None doesn't work for dictionaries
+            if not self.friends_dict:
+                raise AttributeError(
+                    "Network must be generated first with generate_network() if trade_in_network is set to true."
+                )
+
         # reset transactions
         self.clear_transactions()
         
         initial_transaction_count = len(self.transacted_goods_tuple)
         
         for h in range(trading_days):
-            self.loop_across_pairwise_agents(strategic_error, plot_type)
+            self.loop_across_pairwise_agents(
+                strategic_error, 
+                plot_type,
+                trade_within_network,
+                )
             
             # Print number of transactions after each trading day
             current_transaction_count = len(self.transacted_goods_tuple)
@@ -216,7 +259,9 @@ class Market:
             print(f"this is the {h}-th agents index: {self.shuffled_agents_index}")
 
     def loop_across_pairwise_agents(self, strategic_error=None,
-            plot_type=None,):
+            plot_type=None,
+            trade_within_network: bool = False
+            ):
         
         # Shuffle the agents index to randomize activation
         random.shuffle(self.shuffled_agents_index)
@@ -228,12 +273,22 @@ class Market:
         for m in range(loops_across_agents):
             i = self.shuffled_agents_index[m]
             agent_i = self.agents[i]
-            for mplus1 in range(m + 1, self.agent_count):
-                iplus1 = self.shuffled_agents_index[mplus1]
-                agent_iplus1 = self.agents[iplus1]
+
+            # Implement network at this stage to supplant the uniform pairing with other agents
+            if trade_within_network:
+                trading_partners = list(self.friends_dict[i])
+                # Randomize friends list
+                random.shuffle(trading_partners)
+            else:
+                trading_partners = (
+                    self.shuffled_agents_index[m+1 : self.agent_count]
+                )
+
+            for i_plus in trading_partners:
+                agent_i_plus = self.agents[i_plus]
 
                 self.loop_across_pairwise_goods(
-                    agent_i, agent_iplus1, strategic_error,
+                    agent_i, agent_i_plus, strategic_error,
                     plot_type,
                     )
                 
@@ -251,12 +306,12 @@ class Market:
                     time.sleep(0.4)
 
     def loop_across_pairwise_goods(
-            self, agent_i, agent_iplus1, strategic_error=None,
+            self, agent_i, agent_i_plus, strategic_error=None,
             plot_type=None,
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
-            not isinstance(agent_iplus1, Agent)
+            not isinstance(agent_i_plus, Agent)
             ):
             raise TypeError(
                 "agent arguments must be instances of the Agent class"
@@ -266,31 +321,31 @@ class Market:
         for j in range(loops_across_goods):
             k = self.shuffled_goods_index[j]
             for jplus1 in range(j + 1, self.goods_type_count):
-                kplus1 = self.shuffled_goods_index[jplus1]
+                k_plus = self.shuffled_goods_index[jplus1]
 
                 self.loop_within_pairwise_goods(
-                    agent_i, agent_iplus1, k, kplus1, strategic_error,
+                    agent_i, agent_i_plus, k, k_plus, strategic_error,
                     plot_type,
                     )
     
     def loop_within_pairwise_goods(
-            self, agent_i, agent_iplus1, k, kplus1, strategic_error=None,
+            self, agent_i, agent_i_plus, k, k_plus, strategic_error=None,
             plot_type=None,
             ):
         # Check arguments
         if not isinstance(agent_i, Agent) or (
-            not isinstance(agent_iplus1, Agent)
+            not isinstance(agent_i_plus, Agent)
             ):
             raise TypeError(
-                "Arguments agent_i and agent_iplus1 must be instances of the Agent class."
+                "Arguments agent_i and agent_i_plus must be instances of the Agent class."
                 )
-        if not isinstance(k, int) or not isinstance(kplus1, int):
-            raise TypeError("Arguments k and kplus1 must be integers.")
+        if not isinstance(k, int) or not isinstance(k_plus, int):
+            raise TypeError("Arguments k and k_plus must be integers.")
         
         # Get agent i's MRS
-        mrs_i = self.util_calc("mrs", agent_i, k, kplus1)
+        mrs_i = self.util_calc("mrs", agent_i, k, k_plus)
         # Get agent i+1's MRS
-        mrs_iplus1 = self.util_calc("mrs", agent_iplus1, k, kplus1)
+        mrs_iplus1 = self.util_calc("mrs", agent_i_plus, k, k_plus)
         # Determine who is buying k
         mrs_diff = mrs_i - mrs_iplus1
         
@@ -302,16 +357,16 @@ class Market:
         while abs(mrs_diff) > 1e-5 and iteration_count < max_iterations:
             if mrs_diff > 0:
                 buyer_of_k = agent_i
-                seller_of_k = agent_iplus1
+                seller_of_k = agent_i_plus
             else:
-                buyer_of_k = agent_iplus1
+                buyer_of_k = agent_i_plus
                 seller_of_k = agent_i
         
             buyer_decision = self.util_calc(
-                "decide_to_trade", buyer_of_k, k, kplus1
+                "decide_to_trade", buyer_of_k, k, k_plus
                 )
             seller_decision = self.util_calc(
-                "decide_to_trade", seller_of_k, kplus1, k
+                "decide_to_trade", seller_of_k, k_plus, k
                 )
 
             # no need to check whether there is inventory because
@@ -327,12 +382,12 @@ class Market:
                     # proceeds to execute the following else block.
                 else:
                     buyer_of_k.chg_inventory(k, 1)
-                    buyer_of_k.chg_inventory(kplus1, -1)
+                    buyer_of_k.chg_inventory(k_plus, -1)
                     seller_of_k.chg_inventory(k, -1)
-                    seller_of_k.chg_inventory(kplus1, 1)
+                    seller_of_k.chg_inventory(k_plus, 1)
 
                     self.transacted_goods_tuple.append(
-                        (k, kplus1)
+                        (k, k_plus)
                     )
                     self.transacting_agents_tuple.append(
                         (self.agents.index(buyer_of_k), 
@@ -340,8 +395,8 @@ class Market:
                         )
                     )
                     
-                    mrs_diff = self.util_calc("mrs", agent_i, k, kplus1) - (
-                        self.util_calc("mrs", agent_iplus1, k, kplus1)
+                    mrs_diff = self.util_calc("mrs", agent_i, k, k_plus) - (
+                        self.util_calc("mrs", agent_i_plus, k, k_plus)
                     )
                     transaction_occurred = True
                     iteration_count += 1
@@ -354,16 +409,16 @@ class Market:
                         ):
                         self.plot_edgeworth(
                             self.agents.index(agent_i),
-                            self.agents.index(agent_iplus1), 
+                            self.agents.index(agent_i_plus), 
                             k, 
-                            kplus1)
+                            k_plus)
                         time.sleep(4)
             else:
                 break
                 
         # For debugging - if we hit the max iterations, log this
         if iteration_count >= max_iterations:
-            print(f"Warning: Max iterations reached in loop_within_pairwise_goods for goods {k} and {kplus1}")
+            print(f"Warning: Max iterations reached in loop_within_pairwise_goods for goods {k} and {k_plus}")
 
 
     def util_calc(self, output, agent, good1_index, good2_index):
