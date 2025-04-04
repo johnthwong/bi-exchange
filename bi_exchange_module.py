@@ -192,9 +192,13 @@ class Market:
 
     For each "trading day":
 
-    1. Loop across pairwise agents: we will uniformly activate each agent m, where m = 0, 1,..., n - 1. Agent m will pair with each m+z agent, until m+z = n. This subprocedure ensures that we iterate through all (n^2 - n) pairwise agent combinations. After all n-1 agents have gone, we will shuffle the list and start with m = 0 again.
+    1. Loop across pairwise agents: we will uniformly activate each agent m, where m = 0, 1,..., n - 1. 
+    
+    1a. Agent m will pair with each m+z agent, until m+z = n. This subprocedure ensures that we iterate through all (n^2 - n) pairwise agent combinations. 
+    
+    1b. After all n-1 agents have gone, we will shuffle the list and start with m = 0 again.
 
-    1a. Agent retrieval: we index each agent initially by i. We store a duplicate of this initial index i in a list within the market, and index this index list by the aforementioned m. In lieu of shuffling .agents, we shuffle this index. We then iterate through this shuffled list, and for each m, retrieves its value (which is a possible value of i, call it i*), and then find the i*-th agent.
+    1c. Agent retrieval: we index each agent initially by i. We store a duplicate of this initial index i in a list within the market, and index this index list by the aforementioned m. In lieu of shuffling .agents, we shuffle this index. We then iterate through this shuffled list, and for each m, retrieves its value (which is a possible value of i, call it i*), and then find the i*-th agent.
 
     2. Loop across pairwise goods: when paired, agent i will iterate through each good j to see if agent -i is willing to take j. Agent -i will iterate through the same list, starting at j+1, to see if agent i is willing to take the good j+1. This subprocedure ensures that we iterate through all (p^2 - p) pairwise combination of goods. At the end of the loop, we shuffle the list.
 
@@ -224,7 +228,11 @@ class Market:
                 raise ValueError(
                     "strategic_error, if provided, must be between (zero or higher) and (less than one)."
                 )
-        
+        '''
+        trade_within_network supplants step (1c) in the aforementioned exchange procedure. Agent m no longer loops through m+z until m+z = n. Instead, agent m loops across m's list of friends in a random order each time.
+        '''
+
+        # Ensure that network is initialized if network argument is set true.
         if trade_within_network:
             # is None doesn't work for dictionaries
             if not self.friends_dict:
@@ -238,6 +246,7 @@ class Market:
         initial_transaction_count = len(self.transacted_goods_tuple)
         
         for h in range(trading_days):
+            # The nested loop is written in a separate method for conciseness.
             self.loop_across_pairwise_agents(
                 strategic_error, 
                 plot_type,
@@ -249,14 +258,6 @@ class Market:
             new_transactions = current_transaction_count - initial_transaction_count
             print(f"Trading day {h+1}: {current_transaction_count} total transactions, {new_transactions} since yesterday")
             initial_transaction_count = len(self.transacted_goods_tuple)
-            
-            # Update plot after every 10 iterations and at the end
-            # if h % 100 == 0 or h == trading_days - 1:
-            #     self.plot_first_ten_agents_inventory()
-            #     time.sleep(2)
-
-            # DEBUG: print shuffled_agents_index
-            print(f"this is the {h}-th agents index: {self.shuffled_agents_index}")
 
     def loop_across_pairwise_agents(self, strategic_error=None,
             plot_type=None,
@@ -274,7 +275,9 @@ class Market:
             i = self.shuffled_agents_index[m]
             agent_i = self.agents[i]
 
-            # Implement network at this stage to supplant the uniform pairing with other agents
+            # Implement network at this stage.
+            # The index of trading partners changes depending on
+            # whether the network feature is activated.
             if trade_within_network:
                 trading_partners = list(self.friends_dict[i])
                 # Randomize friends list
@@ -292,6 +295,9 @@ class Market:
                     plot_type,
                     )
                 
+                '''
+                All plots are plotted after each pairwise agents, except for the edgeworth box, which is more interesting at a more granular level.
+                '''
                 if plot_type == "pairwise_goods":
                     self.plot_inventory_of_pairwise_goods()
                     time.sleep(5)
@@ -729,9 +735,15 @@ class Market:
 
     def record_utility(self):
         utils = []
+        # Loop across agents, get a snapshot of their utility.
         for agent in self.agents:
             inventory = agent.get_entire_inventory()
+            # preferences are the output elasticities.
             preferences = agent.get_entire_pref()
+            # np.power exponentiates each element in inventory by 
+            # the same-indexed element in preferences.
+            # np.prod calculates the product of all elements 
+            # in the list resulting from np.power().
             util = np.prod(np.power(inventory, preferences))
             utils.append(util)
         
@@ -768,6 +780,10 @@ class Market:
         display(fig)
 
     def plot_individual_utilities(self):
+        '''
+        This plot is great for visually inspecting whether our choice of initial wealth or activation procedure create any artifacts. More specifically, we can inspect whether most trades and their gains are accrued to agents who are activated first.
+        '''
+
         # Check if we have recorded any utilities
         if not self.individual_utilities:
             print("No utility data recorded yet.")
