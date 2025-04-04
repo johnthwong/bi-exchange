@@ -5,7 +5,6 @@
 
 import random
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from plotly.colors import qualitative
 from IPython.display import display, clear_output
@@ -298,9 +297,9 @@ class Market:
                 '''
                 All plots are plotted after each pairwise agents, except for the edgeworth box, which is more interesting at a more granular level.
                 '''
-                if plot_type == "pairwise_goods":
-                    self.plot_inventory_of_pairwise_goods()
-                    time.sleep(5)
+                if plot_type == "edgeworth_plus":
+                    self.plot_edgeworth_plus()
+                    time.sleep(0.4)
                 elif plot_type == "inventory_timeseries":
                     self.plot_timeseries_of_good_inventory()
                     # time.sleep(1)
@@ -410,15 +409,19 @@ class Market:
                     self.record_inventory()
                     self.record_utility()
                     if (
-                        len(self.transacted_goods_tuple) <= 10 and
-                        plot_type == "edgeworth"
+                        plot_type == "edgeworth" and
+                        (
+                            len(self.transacted_goods_tuple) < 10 or
+                            len(self.transacted_goods_tuple) % 100 == 0
+                        )
                         ):
                         self.plot_edgeworth(
                             self.agents.index(agent_i),
                             self.agents.index(agent_i_plus), 
                             k, 
                             k_plus)
-                        time.sleep(4)
+
+                        time.sleep(1)
             else:
                 break
                 
@@ -557,48 +560,42 @@ class Market:
         fig.add_trace(go.Scatter(
             x=agent1_data[good1_name],
             y=agent1_data[good2_name],
-            mode='markers+text',
-            text=f'{agent1}',
-            textposition="middle center",
-            textfont=dict(
-                # Use white text for darker points, black for lighter points
-                color=['white' if t > (agent1_data['time'].max() / 2) else 'black' 
-                       for t in agent1_data['time']],
-                size=9  # Smaller text size
-            ),
+            mode='lines+markers',
+            # Cycle through the list of colors with the modulus operator
+            line=dict(
+                color='lightblue'
+                ),
             marker=dict(
-                color=agent1_data['time'],
-                colorscale='Reds',
-                showscale=True,
-                colorbar=dict(title="Transactions"),
-                size = 13,
+                color=['lightblue' if ( t == max(agent1_data['time']) or t == min(agent1_data['time']) ) else 'rgba(0,0,0,0)' for t in agent1_data['time']],
+                size = 10,
+                line=dict(
+                    width=1,
+                    color=['black' if (t == max(agent1_data['time'])) else 'rgba(0,0,0,0)' for t in agent1_data['time']]
+                ),
             ),
             name=f'Agent {agent1}',
-            showlegend=False
+            # showlegend=False
         ))
 
         # Add trace for agent2
         fig.add_trace(go.Scatter(
             x=agent2_data[good1_name],
             y=agent2_data[good2_name],
-            mode='markers+text',
-            text=f'{agent2}',
-            textposition="middle center",
-            textfont=dict(
-                # Use white text for darker points, black for lighter points
-                color=['white' if t > (agent2_data['time'].max() / 2) else 'black' 
-                       for t in agent2_data['time']],
-                size=9  # Smaller text size
-            ),
+            mode='lines+markers',
+            # Cycle through the list of colors with the modulus operator
+            line=dict(
+                color='pink'
+                ),
             marker=dict(
-                color=agent2_data['time'],
-                colorscale='Blues',
-                colorbar=dict(title="Transactions"),
-                # showscale=False,
-                size = 13,
+                color=['pink' if ( t == max(agent2_data['time']) or t == min(agent2_data['time']) ) else 'rgba(0,0,0,0)' for t in agent2_data['time']],
+                size = 10,
+                line=dict(
+                    width=1,
+                    color=['black' if (t == max(agent2_data['time'])) else 'rgba(0,0,0,0)' for t in agent2_data['time']]
+                ),
             ),
             name=f'Agent {agent2}',
-            showlegend=False
+            # showlegend=False
         ))
 
         # Calculate the max x value and add 5
@@ -610,6 +607,19 @@ class Market:
         max_y1 = agent1_data[good2_name].max()
         max_y2 = agent2_data[good2_name].max()
         max_y = max(max_y1, max_y2) + 10
+        
+        # Add ticker for agents_data length in bottom-right corner
+        fig.add_annotation(
+            text=f"Transactions: {len(agent1_data)}",
+            xref="paper", yref="paper",
+            x=0.98, y=0.02,
+            showarrow=False,
+            font=dict(size=12, color="black"),
+            bgcolor="rgba(255, 255, 255, 0.7)",
+            bordercolor="black",
+            borderwidth=1,
+            borderpad=4
+        )
         
         # Update layout to make the plot square
         fig.update_layout(
@@ -646,64 +656,87 @@ class Market:
         panel.columns = name_vector
 
         return panel
-        
+    
 
-    def plot_inventory_of_pairwise_goods(self):
-        """
-        Creates a biplot of the first twenty agents' inventory for 
-        the first two goods using Plotly. 
-        Replaces previous plot with the current one in notebook environments.
-        """
-        # Check if we have enough agents and goods to create the plot
-        if len(self.agents) < 1 or self.goods_type_count < 2:
-            return
+    def plot_edgeworth_plus(
+            self,
+            good1: int = 0,
+            good2: int = 1,
+            ):
+        '''
+        This plot generalizes the edgeworth plot to up to 11 agents, after which we run out of space and colors.
+        '''
+        panel = self.convert_inventory_panel_to_dataframe()
+
+        panel_select = panel[[f'good_{good1}', f'good_{good2}', 'agent', 'time']]
+
+        # Create a list to store vectors by agent
+        agents_data = []
+        # Create series by agent
+        for i in range(min(self.agent_count, 11)):
+            df_filtered = panel_select[panel_select["agent"] == i]
+            agents_data.append(df_filtered)
+
+        fig = go.Figure()
+
+        # Call a palette
+        palette = qualitative.Pastel
+
+        # Loop to add time series
+        for i in range(min(self.agent_count, 11)):
+            agent_data = agents_data[i]
+            color = palette[i % len(palette)]
+
+            fig.add_trace(go.Scatter(
+                x=agent_data[f"good_{good1}"],
+                y=agent_data[f"good_{good2}"],
+                name=f"Agent {i}",
+                mode='lines+markers',
+                # textposition="top center",
+                # text=agent_data['time'],
+                # Cycle through the list of colors with the modulus operator
+                line=dict(
+                    color=color
+                    ),
+                marker=dict(
+                    color=[color if ( t == max(agent_data['time']) or t == min(agent_data['time']) ) else 'rgba(0,0,0,0)' for t in agent_data['time']],
+                    size = 10,
+                    line=dict(
+                        width=1,
+                        color=['black' if (t == max(agent_data['time'])) else 'rgba(0,0,0,0)' for t in agent_data['time']]
+                    ),
+                ),
+                # textfont=dict(
+                #     color=['black' if ( t == max(agent_data['time']) or t == min(agent_data['time']) ) else 'rgba(0,0,0,0)' for t in agent_data['time']],
+                #     size = 9
+                # )
+            ))
         
-        # Get number of agents to plot (up to 20)
-        agents_to_plot = min(20, len(self.agents))
-        
-        # Create data for the plot
-        x_values = []  # Good 0 inventory
-        y_values = []  # Good 1 inventory
-        agent_labels = []
-        
-        # Collect data for each agent
-        for i in range(agents_to_plot):
-            agent = self.agents[i]
-            x_values.append(agent.get_inventory(0))
-            y_values.append(agent.get_inventory(1))
-            agent_labels.append(f"Agent {i}")
-        
-        # Create the scatter plot
-        fig = go.FigureWidget()
-        
-        fig.add_trace(go.Scatter(
-            x=x_values,
-            y=y_values,
-            mode='markers+text',
-            text=agent_labels,
-            textposition="top center",
-            marker=dict(
-                size=12,
-                color=list(range(agents_to_plot)),
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title="Agent Index")
-            )
-        ))
-        
-        # Update layout
-        fig.update_layout(
-            title="First 10 Agents' Inventory of Goods 0 and 1",
-            xaxis_title="Good 0 Inventory",
-            yaxis_title="Good 1 Inventory",
-            hovermode='closest'
+        # Add ticker for agents_data length in bottom-right corner
+        fig.add_annotation(
+            text=f"Transactions: {len(agents_data[0])}",
+            xref="paper", yref="paper",
+            x=0.98, y=0.02,
+            showarrow=False,
+            font=dict(size=12, color="black"),
+            bgcolor="rgba(255, 255, 255, 0.7)",
+            bordercolor="black",
+            borderwidth=1,
+            borderpad=4
         )
         
-        # Clear the output before displaying the new plot
+        # Update layout to make the plot square
+        fig.update_layout(
+            title="Multilateral Edgeworth Box",
+            xaxis_title=f"Good {good1} Inventory",
+            yaxis_title=f"Good {good2} Inventory",
+            hovermode='closest',
+            width=800,  # Fixed width
+            height=800,  # Equal height for square aspect
+        )
         clear_output(wait=True)
-        
-        # Display the figure (replaces previous output)
-        display(fig)
+        fig.show()
+
 
     def plot_timeseries_of_good_inventory(self, good: int = 0):
         '''
