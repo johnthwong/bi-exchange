@@ -17,4 +17,5 @@ An agent-based model of a general bilateral exchange problem of *A* agents and *
 
 ## Output
 Below is a plot of each agent's inventory of two goods, over time, in an 10-agent, 20-good problem, after two full activations.
+
 <img src="output/newplot.png"/>
