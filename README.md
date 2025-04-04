@@ -1,9 +1,6 @@
 # Bilateral Exchange
 An agent-based model of a general bilateral exchange problem of *A* agents and *N* goods. This model uses boundedly rational agents, in the sense that the agents do not know the optimal quantities that maximize their utility. Instead, they iteratively make mutually beneficial trades, until those are no longer possible. 
 
-<img src="output/newplot.png"/>
-*A plot of each agent's inventory of two goods, over time, in an 10-agent, 20-good problem*.
-
 ## Purpose
 1. This model shows that a numerical solution to a general equilibrium problem can be obtained. This can be helpful as an analytic solution becomes increasingly intractable as *A* and *N* increase.
 2. The exchange process is also decentralized, i.e., it does not need to assume the presence of an [auctioneer](https://en.wikipedia.org/wiki/Walrasian_auction). This better approximates real-world exchange of products.
@@ -17,3 +14,7 @@ An agent-based model of a general bilateral exchange problem of *A* agents and *
   -  New: Time series plot of aggergate utility.
   -  New: Time series plot of individual utilities.
   -  New: Plot time series of a given good's inventory, by agent.
+
+## Output
+Below is a plot of each agent's inventory of two goods, over time, in an 10-agent, 20-good problem, after two full activations.
+<img src="output/newplot.png"/>
