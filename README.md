@@ -13,7 +13,7 @@ An agent-based model of a general bilateral exchange problem of *A* agents and *
 - 2025-04-03:
   -  Fix: Edgeworth box now works.
   -  New: Trade within friendship network only.
-  -  New: Pairwise good plot.
+  -  New: Multilateral Edgeworth box plot.
   -  New: Time series plot of aggergate utility.
   -  New: Time series plot of individual utilities.
   -  New: Plot time series of a given good's inventory, by agent.
