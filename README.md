@@ -7,4 +7,10 @@ An agent-based model of a general bilateral exchange problem of *A* agents and *
 3. We show that even when agents do not have full information about prices and others' preferences, equilibrium can still emerge.
 
 ## What's new
-- 2025-03-05: Issue: the Plotly graph does not update.
+- 2025-04-03:
+  -  Fix: the Plotly graphs now work.
+  -  New: Trade within friendship network only.
+  -  New: Pairwise good plot.
+  -  New: Time series plot of aggergate utility.
+  -  New: Time series plot of individual utilities.
+  -  New: Plot time series of a given good's inventory, by agent.
