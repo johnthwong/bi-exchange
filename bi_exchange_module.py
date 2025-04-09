@@ -302,7 +302,7 @@ class Market:
                     time.sleep(0.4)
                 elif plot_type == "inventory_timeseries":
                     self.plot_timeseries_of_good_inventory()
-                    # time.sleep(1)
+                    time.sleep(0.4)
                 elif plot_type == "aggregate_utility":
                     self.plot_aggregate_utility()
                     time.sleep(0.4)
