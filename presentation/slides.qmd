@@ -17,6 +17,7 @@ execute:
 1.  Motivation
 2.  Demonstration
 3.  Psuedo-code
+    1. Uniform activation of pairwise combinations
 4.  Shuffling
 5.  Extensions
 6.  More visualizations
@@ -25,12 +26,14 @@ execute:
 
 -   Two agents trading two goods is already pretty gnarly to solve. 
 
-![](img/edgeworth_axtell.png){width=60% fig-align="center"} 
+![](img/edgeworth_axtell.png){width=40% fig-align="center"} 
 
 \pause
 
--   What if we increase the number of agents to three? Or four? Or any arbitrary *A*? \pause
--   Or what if we increase the number of goods to *N*?
+- What if we increase the number of agents to three? Or four? Or any arbitrary *A*? And what if we increase the number of goods to *N*? \pause
+  - You would need a numeraire (i.e., reference good), e.g., money.
+  - Each agent would need to know their demand curve at every price (i.e., for every unit of the numeraire).
+  - Then each agent would need to submit this to an auctioneer, who centrally sets price so that quantity demanded is equal to the fixed supply.
 
 # Demonstration
 
@@ -43,21 +46,33 @@ initialize Market(agents = A, goods = N): \\
 \ \ \ \ initialize agent \\
 \ \ \ \ generate N random elasticities that sum to 1 \\
 \ \ \ \ generate N random inventories \\
----------------------------------------------\\
+-----------------------------------------------
+\end{verbatim}
+
+## Pseudo-code
+
+\begin{verbatim}
+initialize Market(agents = A, goods = N): \\
+\ \ generate goods list \\
+\ \ for 1:A: \\
+\ \ \ \ initialize agent \\
+\ \ \ \ generate N random elasticities that sum to 1 \\
+\ \ \ \ generate N random inventories \\
+-----------------------------------------------\\
 execute exchange(days = 1): \\
 \ \ shuffle agents list and goods list \\ 
 \ \ FOR a in 1:(A-1): \\
 \ \ \ \ FOR p in 1:(A-a): \\
-\ \ \ \ \ \ pair agent a with agent a+p\\
+\ \ \ \ \ \ \textcolor{blue}{pair agent a with agent a+p}\\
 \ \ \ \ \ \ FOR n in 1:(N-1): \\
 \ \ \ \ \ \ \ \ FOR q in 1:(N-n): \\
-\ \ \ \ \ \ \ \ \ \ agent with higher MRS(n, n+q) offers good n \\
-\ \ \ \ \ \ \ \ \ \ other agent offers good n+q \\
+\ \ \ \ \ \ \ \ \ \ agent with higher MRS(n, n+q) gets good n \\
+\ \ \ \ \ \ \ \ \ \ other agent gets good n+q \\
 \ \ \ \ \ \ \ \ \ \ WHILE trade increases both agents' utilities: \\ 
 \ \ \ \ \ \ \ \ \ \ \ \ trade one good n for one good n+q
 \end{verbatim}
 
-## Uniform activation of pairwise combinations (A=5)
+## Uniform activation of pairwise combinations (A=3)
 
 \begin{figure}
 \centering
@@ -72,22 +87,17 @@ execute exchange(days = 1): \\
 \node[box] (A) at (0,0) {$a_1$};
 \node[box] (B) at (3,0) {$a_2$};
 \node[box] (C) at (6,0) {$a_3$};
-\node[box] (D) at (9,0) {$a_4$};
-\node[box] (E) at (12,0) {$a_5$};
 
 % Connections
 \draw[->] (A) to[bend left=25] (B);
 \draw[->] (A) to[bend left=35] (C);
-\draw[->] (A) to[bend left=45] (D);
-\draw[->] (A) to[bend left=55] (E);
 
 \draw[->] (B) to[bend right=25] (C);
-\draw[->] (B) to[bend right=35] (D);
-\draw[->] (B) to[bend right=45] (E);
 
 \end{tikzpicture}
 \end{figure}
 
+There are total $\frac{A^2-A}{2}$ combinations---or the upper triangle of an $A \times A$ matrix.
 
 ## Shuffling
 1. Agents are stored in a list of agents that is never shuffled.
@@ -105,7 +115,7 @@ $$
 \end{bmatrix}
 $$
 
-\pause 3. Shuffle list of indices:
+3. Shuffle list of indices:
 $$
 \begin{bmatrix}
 4 & 9 & 6 & 1 & 10 & 2 & 8 & 5 & 3 & 7
@@ -124,8 +134,8 @@ execute exchange(days = 1, \textcolor{blue}{threshold = 0.5}): \\
 \ \ \ \ \ \ pair agent a with agent a+p\\
 \ \ \ \ \ \ FOR n in 1:(N-1): \\
 \ \ \ \ \ \ \ \ FOR q in 1:(N-n): \\
-\ \ \ \ \ \ \ \ \ \ agent with higher MRS(n, n+q) offers good n \\
-\ \ \ \ \ \ \ \ \ \ other agent offers good n+q \\
+\ \ \ \ \ \ \ \ \ \ agent with higher MRS(n, n+q) gets good n \\
+\ \ \ \ \ \ \ \ \ \ other agent gets good n+q \\
 \ \ \ \ \ \ \ \ \ \ WHILE trade increases both agents' utilities: \\ 
 \ \ \ \ \ \ \ \ \ \  \ \ \textcolor{blue}{draw u from U[0,1]} \\
 \ \ \ \ \ \ \ \ \ \  \ \ \textcolor{blue}{IF u < threshold}: \\
@@ -137,20 +147,18 @@ execute exchange(days = 1, \textcolor{blue}{threshold = 0.5}): \\
 \begin{verbatim}
 initialize Market(..., \textcolor{blue}{friends = 3}): \\ 
 \ \ ... \\
-\ \ \textcolor{blue}{create Phonebook} \\
+\ \ \textcolor{blue}{create RelationshipChart} \\
 \ \ \textcolor{blue}{for 1:A:} \\
 \ \ \ \ \textcolor{blue}{sample agents list for 3 friends} \\
 \ \ \ \ \textcolor{blue}{store friends' indices in dictionary} \\
-\ \ \ \ \textcolor{blue}{append dictionary to Phonebook} \\
+\ \ \ \ \textcolor{blue}{append dictionary to RelationshipChart} \\
 execute exchange(days = 1): \\
 \ \ shuffle agents list and goods list \\ 
 \ \ FOR a in 1:A: \\
-\ \ \ \ \textcolor{blue}{FOR p in Phonebook[a]:} \\
+\ \ \ \ \textcolor{blue}{FOR p in RelationshipChart[a]:} \\
 \ \ \ \ \ \ FOR n in 1:N \\
 \ \ \ \ \ \ \ \ FOR q in 1:(N-n): \\
-\ \ \ \ \ \ \ \ \ \ agent with higher MRS(n, n+q) offers good n \\
-\ \ \ \ \ \ \ \ \ \ other agent offers good n+q \\
-\ \ \ \ \ \ \ \ \ \ WHILE ...
+\ \ \ \ \ \ \ \ \ \ ...
 \end{verbatim}
 
 ## More visualizations!
